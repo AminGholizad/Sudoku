@@ -1,38 +1,41 @@
-import numpy as np
 from sys import stderr
+from typing import Optional
+
+import numpy as np
+from numpy.typing import NDArray
 
 
-class Board(object):
-    def __init__(self, b=None):
-        if b is None:
-            b = np.array([0]*81)
-        self.board = np.array(b).reshape(9, 9)
+class Board:
+    def __init__(self, board: Optional[NDArray[np.int_] | list[list[int]] | list[int]] = None):
+        if board is None:
+            board = np.array([0]*81)
+        self.board = np.array(board).reshape(9, 9)
 
-    def setCellValue(self, r, c, v):
-        self.board[r, c] = v
+    def set_cell_value(self, row: int, col: int, val: int) -> 'Board':
+        self.board[row, col] = val
         return self
 
-    def getValue(self, r, c):
-        return self.board[r, c]
+    def get_value(self, row: int, col: int) -> int:
+        return self.board[row, col]
 
-    def isCellEmpty(self, r, c):
-        return self.board[r, c] == 0
+    def is_cell_empty(self, row: int, col: int) -> bool:
+        return self.board[row, col] == 0
 
-    def validNumbers(self, r, c):
-        if self.board[r, c] == 0:
-            row = self.board[r, :]
-            col = self.board[:, c]
-            xl = r//3*3
-            yl = c//3*3
+    def valid_numbers(self, row: int, col: int) -> NDArray[np.int_]:
+        if self.board[row, col] == 0:
+            board_row = self.board[row, :]
+            board_col = self.board[:, col]
+            xl = row//3*3
+            yl = col//3*3
             sq = self.board[xl:xl+3, yl:yl+3].reshape(9)
-            return np.setdiff1d(range(1, 10), [row, col, sq])
+            return np.setdiff1d(range(1, 10), [board_row, board_col, sq])
         else:
             return np.array([])
 
-    def copy(self):
+    def copy(self) -> 'Board':
         return Board(self.board)
 
-    def printBoard(self):
+    def print_board(self) -> None:
         for r in range(9):
             if r % 3 == 0:
                 print('-'*25)
@@ -43,7 +46,7 @@ class Board(object):
             print('|')
         print('-'*25)
 
-    def isBoardSolved(self):
+    def is_board_solved(self) -> bool:
         if np.any(self.board == 0):
             return False
         rowSum = np.sum(self.board, 0)
@@ -56,7 +59,7 @@ class Board(object):
                     return False
         return True
 
-    def isBoardValid(self):
+    def is_board_valid(self) -> bool:
         b = self.board
         if np.any(b > 9) or np.any(b < 0):
             return False
@@ -76,12 +79,13 @@ class Board(object):
                     return False
         return True
 
-    def solve(self, visual=False, w=40, h=40, m=6):
-        if not self.isBoardValid():
+    def solve(self, visual: bool = False, screen_width: int = 40, screen_height: int = 40, cell_margin: int = 6) -> Optional['Board']:
+        if not self.is_board_valid():
             print("Board is not valid! Can't be solved!", file=stderr)
             return None
         if visual:
-            cp, o = self.isolveVisual(w=w, h=h, m=m)
+            cp, o = self.isolve_visual(
+                w=screen_width, h=screen_height, m=cell_margin)
         else:
             cp, o = self.isolve()
         if o:
@@ -90,43 +94,46 @@ class Board(object):
             print("There is no valid solutions!", file=stderr)
             return None
 
-    def isolve(self, ir=0, ic=0):
-        if self.isBoardSolved():
+    def isolve(self, ir: int = 0, ic: int = 0) -> tuple['Board', bool]:
+        if self.is_board_solved():
             return self, True
         for r in range(ir, 9):
             if ir != r:
                 ic = 0
             for c in range(ic, 9):
-                if self.isCellEmpty(r, c):
-                    for v in self.validNumbers(r, c):
-                        cp, o = self.copy().setCellValue(r, c, v).isolve(r, c+1)
+                if self.is_cell_empty(r, c):
+                    for v in self.valid_numbers(r, c):
+                        cp, o = self.copy().set_cell_value(r, c, v).isolve(r, c+1)
                         if o:
                             return cp, True
                     return self, False
+        return self, False
 
-    def isolveVisual(self, ir=0, ic=0, w=40, h=40, m=6):
+    def isolve_visual(self, ir: int = 0, ic: int = 0, w: int = 40, h: int = 40, m: int = 6) -> tuple['Board', bool]:
         from gui import Grid
-        Grid(self, w=w, h=h, m=m).display()
-        if self.isBoardSolved():
+        Grid(self, cell_width=w, cell_height=h, cell_margin=m).display()
+        if self.is_board_solved():
             return self, True
         for r in range(ir, 9):
             if ir != r:
                 ic = 0
             for c in range(ic, 9):
-                if self.isCellEmpty(r, c):
-                    for v in self.validNumbers(r, c):
-                        cp, o = self.copy().setCellValue(r, c, v).isolveVisual(ir=r, ic=c+1, w=w, h=h, m=m)
+                if self.is_cell_empty(r, c):
+                    for v in self.valid_numbers(r, c):
+                        cp, o = self.copy().set_cell_value(
+                            r, c, v).isolve_visual(ir=r, ic=c+1, w=w, h=h, m=m)
                         if o:
                             return cp, True
                     return self, False
+        return self, False
 
-    def isSolvable(self):
+    def is_solvable(self) -> bool:
         if self.solve() is not None:
             return True
         return False
 
 
-def test(iter=100, visual=False):
+def test(iteration: int = 100, *, visual: bool = False):
     from time import time
     s = Board(np.array([[1, 0, 0, 0, 0, 0, 5, 0, 0],
                         [0, 0, 0, 8, 0, 0, 0, 0, 0],
@@ -139,15 +146,18 @@ def test(iter=100, visual=False):
                         [0, 0, 0, 2, 0, 0, 0, 1, 0]]))
     t1 = time()
     if not visual:
-        s.printBoard()
-    for i in range(iter):
+        s.print_board()
+    solved = None
+    for _ in range(iteration):
         solved = s.solve(visual)
     t2 = time()
     if not visual:
         print(
-            f'It took {(t2-t1)/iter:0.04} seconds on average over {iter} ireterations')
-        solved.printBoard()
+            f'It took {(t2-t1)/iteration:0.04} seconds on average over {iteration} ireterations')
+        if solved:
+            solved.print_board()
 
 
 if __name__ == "__main__":
-    test(1, True)
+    test(1, visual=False)
+    test(1, visual=True)

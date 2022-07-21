@@ -1,30 +1,35 @@
-import pygame
-import os
+from enum import Enum, auto
 from time import time
 
+import pygame
 
-class Grid(object):
-    play = 1
-    design = 2
+from sudoku import Board
 
-    def __init__(self, b, w=40, h=40, m=6):
-        self.cellWidth = w
-        self.cellHeight = h
-        self.margin = m
-        self.selected = []
-        self.mode = Grid.play
-        self.updateBoard(b)
 
-    def draw(self, screen):
-        for r in range(9):
-            row = pygame.Surface((self.get_width(), self.cellHeight))
-            row.fill((0, 0, 0))
-            for c in range(9):
-                self.grid[r][c].draw(row)
+class Mode(Enum):
+    PLAY = auto()
+    DESIGN = auto()
+
+
+class Grid:
+    def __init__(self, board: Board, cell_width: int = 40, cell_height: int = 40, cell_margin: int = 6):
+        self.cell_width = cell_width
+        self.cell_height = cell_height
+        self.cell_margin = cell_margin
+        self.selected: tuple[int, int] | None = None
+        self.mode = Mode.PLAY
+        self.update_board(board)
+
+    def draw(self, screen: pygame.surface.Surface) -> None:
+        for row in range(9):
+            screen_row = pygame.Surface((self.get_width(), self.cell_height))
+            screen_row.fill((0, 0, 0))
+            for col in range(9):
+                self.grid[row][col].draw(screen_row)
             screen.blit(
-                row, (self.margin//2, self.cellHeight*r+self.margin*(r//3+1)))
+                screen_row, (self.cell_margin//2, self.cell_height*row+self.cell_margin*(row//3+1)))
 
-    def display(self, duration=0.01):
+    def display(self, duration: float = 0.01) -> None:
         pygame.init()
         screen = pygame.display.set_mode(self.get_size())
         pygame.display.set_caption('Soduku')
@@ -41,94 +46,91 @@ class Grid(object):
             pygame.display.flip()
             clock.tick(fps_max)
 
-    def selectCell(self, pos):
-        r = pos[1]//(self.cellHeight+self.margin//2)
-        c = pos[0]//(self.cellWidth+self.margin//2)
-        if self.board.getValue(r, c) == 0:
+    def select_cell(self, pos: tuple[int, int]) -> None:
+        new_row = pos[1]//(self.cell_height+self.cell_margin//2)
+        new_col = pos[0]//(self.cell_width+self.cell_margin//2)
+        if self.board.get_value(new_row, new_col) == 0:
             if self.selected:
-                x, y = self.selected
-                self.grid[x][y].deselect()
-            self.grid[r][c].select()
-            self.selected = [r, c]
+                row, col = self.selected
+                self.grid[row][col].deselect()
+            self.grid[new_row][new_col].select()
+            self.selected = (new_row, new_col)
 
-    def selectedUpdate(self, t):
-        if self.mode == Grid.play:
-            self.selectedTemp(t)
-        elif self.mode == Grid.design:
-            self.selectedTemp(t, forced=True)
-            self.selectedValue()
+    def update_selected(self, val: int) -> None:
+        if self.mode == Mode.PLAY:
+            self.update_selected_temp(val)
+        elif self.mode == Mode.DESIGN:
+            self.update_selected_temp(val, forced=True)
+            self.update_selected_value()
 
-    def selectedTemp(self, t, forced=False):
+    def update_selected_temp(self, val: int, forced: bool = False) -> None:
         if self.selected:
-            x, y = self.selected
-            self.grid[x][y].setTemp(t, forced=forced)
+            row, col = self.selected
+            self.grid[row][col].set_temp_val(val, forced=forced)
 
-    def selectedValue(self):
+    def update_selected_value(self) -> None:
         if self.selected:
-            x, y = self.selected
-            b = self.board.copy()
-            b.setCellValue(x, y, self.grid[x][y].getTemp())
-            if b.isSolvable():
-                self.board.setCellValue(x, y, b.getValue(x, y))
-                self.grid[x][y].acceptTemp()
+            row, col = self.selected
+            board_copy = self.board.copy()
+            board_copy.set_cell_value(row, col, self.grid[row][col].get_temp())
+            if board_copy.is_solvable():
+                self.board.set_cell_value(
+                    row, col, board_copy.get_value(row, col))
+                self.grid[row][col].accept_temp()
             else:
-                self.grid[x][y].rejectTemp()
+                self.grid[row][col].reject_temp()
 
-    def updateBoard(self, b):
+    def update_board(self, b: Board) -> None:
         self.board = b.copy()
-        self.grid = [[Cell(r, c, v=b.getValue(r, c), w=self.cellWidth, h=self.cellHeight, m=self.margin)
+        self.grid = [[Cell(r, c, value=b.get_value(r, c), width=self.cell_width, height=self.cell_height, margin=self.cell_margin)
                       for c in range(9)] for r in range(9)]
 
-    def designMode(self):
-        from Sudoku import Board
-        self.updateBoard(Board([0]*81))
-        self.mode = Grid.design
+    def design_mode(self) -> None:
+        self.update_board(Board([0]*81))
+        self.mode = Mode.DESIGN
 
-    def playMode(self):
-        self.mode = Grid.play
+    def play_mode(self) -> None:
+        self.mode = Mode.PLAY
 
-    def get_size(self):
+    def get_size(self) -> tuple[int, int]:
         return (self.get_width(), self.get_height())
 
-    def get_width(self):
-        return self.cellWidth*9+self.margin*5
+    def get_width(self) -> int:
+        return self.cell_width*9+self.cell_margin*5
 
-    def get_height(self):
-        return self.cellHeight*9+self.margin*5
+    def get_height(self) -> int:
+        return self.cell_height*9+self.cell_margin*5
 
 
-class Cell(object):
-    def __init__(self, r, c, w=40, h=40, m=6, v=0, t=0):
-        self.value = v
-        self.temp = t
-        self.row = r
-        self.col = c
-        self.bg = (0, 0, 0)
-        self.width = w
-        self.height = h
-        self.margin = m
+class Cell:
+    def __init__(self, row: int, col: int, width: int = 40, height: int = 40, margin: int = 6, value: int = 0, temp_val: int = 0):
+        self.value = value
+        self.temp_val = temp_val
+        self.row = row
+        self.col = col
+        self.back_ground_color = (0, 0, 0)
+        self.width = width
+        self.height = height
+        self.margin = margin
 
-    def setValue(self, v):
-        self.value = v
-
-    def setTemp(self, t, forced=False):
+    def set_temp_val(self, val: int, forced: bool = False) -> None:
         if self.value == 0:
-            self.temp = t
+            self.temp_val = val
         elif forced:
-            self.temp = t
+            self.temp_val = val
 
-    def getTemp(self):
-        return self.temp
+    def get_temp(self) -> int:
+        return self.temp_val
 
-    def acceptTemp(self):
-        self.value = self.temp
+    def accept_temp(self) -> None:
+        self.value = self.temp_val
 
-    def rejectTemp(self):
-        self.temp = 0
+    def reject_temp(self) -> None:
+        self.temp_val = 0
 
-    def draw(self, row):
+    def draw(self, row: pygame.surface.Surface) -> None:
         box = pygame.Surface((self.width, self.height))
-        box.fill(self.bg)
+        box.fill(self.back_ground_color)
         innerBox = pygame.Surface(
             (box.get_width()-self.margin, box.get_height()-self.margin))
         innerBox.fill((255, 255, 255))
@@ -139,23 +141,22 @@ class Cell(object):
             text = font.render(str(self.value), True, (0, 0, 0))
             box.blit(text, (box.get_width() // 2 - text.get_width()//2,
                             box.get_height() // 2 - text.get_height()//2))
-        elif self.temp != 0:
+        elif self.temp_val != 0:
             font = pygame.font.SysFont("comicsansms", box.get_height()//2)
-            text = font.render(str(self.temp), True, (128, 128, 128))
+            text = font.render(str(self.temp_val), True, (128, 128, 128))
             box.blit(text, (box.get_width() // 4 - text.get_width()//2,
                             box.get_height() // 4 - text.get_height()//2))
         row.blit(box, (self.width*(self.col)+self.margin *
                        (self.col//3+1), self.margin//2))
 
-    def select(self):
-        self.bg = (255, 0, 0)
+    def select(self) -> None:
+        self.back_ground_color = (255, 0, 0)
 
-    def deselect(self):
-        self.bg = (0, 0, 0)
+    def deselect(self) -> None:
+        self.back_ground_color = (0, 0, 0)
 
 
-def runGame():
-    from Sudoku import Board
+def runGame() -> None:
     grid = Grid(Board([[1, 0, 0, 0, 0, 0, 5, 0, 0],
                        [0, 0, 0, 8, 0, 0, 0, 0, 0],
                        [0, 0, 9, 0, 0, 0, 0, 6, 0],
@@ -164,7 +165,7 @@ def runGame():
                        [0, 0, 0, 0, 4, 0, 0, 3, 0],
                        [0, 3, 0, 0, 0, 0, 0, 0, 0],
                        [2, 0, 1, 0, 0, 0, 0, 0, 0],
-                       [0, 0, 0, 2, 0, 0, 0, 1, 0]]), w=40, h=40, m=2)
+                       [0, 0, 0, 2, 0, 0, 0, 1, 0]]), cell_width=40, cell_height=40, cell_margin=2)
 
     pygame.init()
     screen = pygame.display.set_mode(grid.get_size())
@@ -180,49 +181,49 @@ def runGame():
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == pygame.BUTTON_LEFT:
                 pos = pygame.mouse.get_pos()
-                grid.selectCell(pos)
+                grid.select_cell(pos)
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1 or event.key == pygame.K_KP1:
-                    grid.selectedUpdate(1)
-                if event.key == pygame.K_2 or event.key == pygame.K_KP2:
-                    grid.selectedUpdate(2)
-                if event.key == pygame.K_3 or event.key == pygame.K_KP3:
-                    grid.selectedUpdate(3)
-                if event.key == pygame.K_4 or event.key == pygame.K_KP4:
-                    grid.selectedUpdate(4)
-                if event.key == pygame.K_5 or event.key == pygame.K_KP5:
-                    grid.selectedUpdate(5)
-                if event.key == pygame.K_6 or event.key == pygame.K_KP6:
-                    grid.selectedUpdate(6)
-                if event.key == pygame.K_7 or event.key == pygame.K_KP7:
-                    grid.selectedUpdate(7)
-                if event.key == pygame.K_8 or event.key == pygame.K_KP8:
-                    grid.selectedUpdate(8)
-                if event.key == pygame.K_9 or event.key == pygame.K_KP9:
-                    grid.selectedUpdate(9)
-
-                if event.key == pygame.K_KP_ENTER or event.key == pygame.K_RETURN:
-                    grid.selectedValue()
+                if event.key in (pygame.K_1, pygame.K_KP1):
+                    grid.update_selected(1)
+                if event.key in (pygame.K_2, pygame.K_KP2):
+                    grid.update_selected(2)
+                if event.key in (pygame.K_3, pygame.K_KP3):
+                    grid.update_selected(3)
+                if event.key in (pygame.K_4, pygame.K_KP4):
+                    grid.update_selected(4)
+                if event.key in (pygame.K_5, pygame.K_KP5):
+                    grid.update_selected(5)
+                if event.key in (pygame.K_6, pygame.K_KP6):
+                    grid.update_selected(6)
+                if event.key in (pygame.K_7, pygame.K_KP7):
+                    grid.update_selected(7)
+                if event.key in (pygame.K_8, pygame.K_KP8):
+                    grid.update_selected(8)
+                if event.key in (pygame.K_9, pygame.K_KP9):
+                    grid.update_selected(9)
+                if event.key in (pygame.K_KP_ENTER, pygame.K_RETURN):
+                    grid.update_selected_value()
                 if event.key == pygame.K_n and pygame.key.get_mods() and pygame.KMOD_SHIFT:
-                    grid.designMode()
+                    grid.design_mode()
                 if event.key == pygame.K_s and pygame.key.get_mods() and pygame.KMOD_SHIFT:
-                    grid.playMode()
+                    grid.play_mode()
                 if event.key == pygame.K_SPACE:
-                    grid.playMode()
+                    grid.play_mode()
                     b = grid.board.solve(
-                        visual=True, w=grid.cellWidth, h=grid.cellHeight, m=grid.margin)
-                    grid.updateBoard(b)
+                        visual=True, screen_width=grid.cell_width, screen_height=grid.cell_height, cell_margin=grid.cell_margin)
+                    if b:
+                        grid.update_board(b)
 
                 if event.key == pygame.K_BACKSPACE:
-                    grid.selectedUpdate(0)
+                    grid.update_selected(0)
 
                 if event.key == pygame.K_ESCAPE:
                     done = True
                     break
 
         grid.draw(screen)
-        if grid.mode == Grid.design:
+        if grid.mode == Mode.DESIGN:
             font = pygame.font.SysFont("comicsansms", 12)
             text = font.render("design mode", True, (0, 128, 0))
             screen.blit(text, (screen.get_width()-text.get_width(),
